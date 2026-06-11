@@ -1158,11 +1158,7 @@ function renderMap(){
   isRenderingMap = true;
 
   const pts = FILTERED.filter(r=>r.lat&&r.lng);
-  // Debug: log berapa titik yang punya koordinat valid
-  console.log('[MAP DEBUG] FILTERED:', FILTERED.length, '| pts dengan lat/lng:', pts.length);
-  if(FILTERED.length > 0 && pts.length === 0){
-    console.warn('[MAP DEBUG] Semua tiket tidak punya koordinat! Contoh data:', FILTERED.slice(0,3).map(r=>({id:r.id, lat:r.lat, lng:r.lng, raw:r})));
-  }
+
 
   // Hapus marker yang sudah tidak ada di FILTERED
   const activeIds = new Set(pts.map(r=>r.id));
@@ -1206,6 +1202,8 @@ function renderMap(){
   // fitBounds: sekali saat pertama, dan saat set tiket berubah signifikan (beda filter)
   const fitKey = pts.map(r=>r.id).sort().join(',');
   if(pts.length && (!mapInitialFit || fitKey !== (renderMap._lastFitKey||''))){
+    // invalidateSize dulu biar Leaflet tahu ukuran container yang benar
+    map.invalidateSize();
     const b=L.latLngBounds(pts.map(r=>[r.lat,r.lng]));
     map.fitBounds(b,{padding:[20,20]});
     mapInitialFit = true;
@@ -1234,8 +1232,16 @@ function preloadMap(){
 
 // Lazy load map on scroll (fallback kalau preload belum jalan)
 const obs=new IntersectionObserver(entries=>{
-  if(entries[0].isIntersecting&&!mapReady){
-    loadLeaflet(()=>initMap());
+  if(entries[0].isIntersecting){
+    if(!mapReady){
+      loadLeaflet(()=>initMap());
+    } else if(map){
+      // Map sudah init tapi baru masuk viewport — paksa hitung ulang ukuran dan render
+      setTimeout(()=>{
+        map.invalidateSize();
+        if(FILTERED.length > 0) renderMap();
+      }, 100);
+    }
   }
 },{threshold:0.1});
 obs.observe(document.getElementById('map'));
