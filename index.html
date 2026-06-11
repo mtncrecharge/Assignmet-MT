@@ -463,6 +463,8 @@ const TECH_LOC = {
 let DATA=[], FILTERED=[], map=null, markerLayer=null, mapReady=false, openDetail=null;
 let trackingInterval=null, isTracking=false, techMarkers={};
 let CURRENT_USER=null;
+let notifInterval = null;
+let lastNotifTime = 0;
 
 // ── Rate limit login ──
 const _loginAttempts = {};
@@ -1202,10 +1204,15 @@ function renderMap(){
   // fitBounds: sekali saat pertama, dan saat set tiket berubah signifikan (beda filter)
   const fitKey = pts.map(r=>r.id).sort().join(',');
   if(pts.length && (!mapInitialFit || fitKey !== (renderMap._lastFitKey||''))){
-    // invalidateSize dulu biar Leaflet tahu ukuran container yang benar
     map.invalidateSize();
-    const b=L.latLngBounds(pts.map(r=>[r.lat,r.lng]));
-    map.fitBounds(b,{padding:[20,20]});
+    // Filter koordinat valid (bukan NaN/null) sebelum fitBounds
+    const validPts = pts.filter(r => isFinite(r.lat) && isFinite(r.lng));
+    if(validPts.length){
+      try{
+        const b = L.latLngBounds(validPts.map(r=>[r.lat,r.lng]));
+        if(b.isValid()) map.fitBounds(b,{padding:[20,20]});
+      } catch(e){ console.warn('fitBounds error:', e); }
+    }
     mapInitialFit = true;
     renderMap._lastFitKey = fitKey;
   }
@@ -1584,8 +1591,7 @@ function playNotifSound(role){
 }
 
 // ── Notifikasi setiap 4 jam: cek GSheet apakah nama teknisi ada di assignment hari ini ──
-let notifInterval = null;
-let lastNotifTime = 0;
+// notifInterval dan lastNotifTime dideklarasi di atas (dekat CURRENT_USER)
 
 async function checkAndNotify(){
   try{
